@@ -63,11 +63,13 @@ func (d *Decoder) getBuffer(cc *C.AVCodecContext, fr *C.AVFrame) {
 	ah := h + 16
 	acw := aw / 2
 	ach := ah / 2
-	b := make([]byte, aw*ah+2*acw*ach)
+	ysz := aw * ah
+	csz := acw * ach
+	b := make([]byte, ysz+2*csz)
 	img := &image.YCbCr{
-		Y:              b[:aw*ah],
-		Cb:             b[aw*ah : aw*ah+1*acw*ach],
-		Cr:             b[aw*ah+1*acw*ach : aw*ah+2*acw*ach],
+		Y:              b[:ysz],
+		Cb:             b[ysz : ysz+csz],
+		Cr:             b[ysz+csz : ysz+2*csz],
 		SubsampleRatio: image.YCbCrSubsampleRatio420,
 		YStride:        aw,
 		CStride:        acw,
