@@ -1,12 +1,16 @@
 package ffvp8
 
 // #cgo darwin CFLAGS: -I/Users/jacereda/ffmpeg/b/include
-// #cgo darwin LDFLAGS: -L/Users/jacereda/ffmpeg/b/lib -lavcodec
+// #cgo darwin LDFLAGS: -L/Users/jacereda/ffmpeg/b/lib
+// #cgo LDFLAGS: -lavcodec
 //
 // #include "libavcodec/avcodec.h"
 // extern AVCodec ff_vp8_decoder;
+// extern void ff_init_buffer_info(AVCodecContext *s, AVFrame *frame);
 // static int get_buffer(AVCodecContext * cc, AVFrame * f) { 
 //   void vp8GetBuffer(AVCodecContext * cc, AVFrame * f);
+//   f->type = FF_BUFFER_TYPE_USER;
+//   f->extended_data = f->data;
 //   vp8GetBuffer(cc, f);
 //   return 0;
 // }
@@ -20,21 +24,21 @@ package ffvp8
 // }
 import "C"
 
-import(
+import (
+	"container/list"
 	"image"
-        "unsafe"
-        "log"
-"container/list"
+	"log"
+	"unsafe"
 )
 
 func init() {
-//	C.avcodec_register_all()
+	//	C.avcodec_register_all()
 	C.avcodec_register(&C.ff_vp8_decoder)
 }
 
 type Decoder struct {
-	c *C.AVCodec
-	cc *C.AVCodecContext
+	c    *C.AVCodec
+	cc   *C.AVCodecContext
 	imgs list.List
 }
 
@@ -53,9 +57,22 @@ func vp8ReleaseBuffer(cc *C.AVCodecContext, fr *C.AVFrame) {
 }
 
 func (d *Decoder) getBuffer(cc *C.AVCodecContext, fr *C.AVFrame) {
-	log.Println("getting buffer", fr)
-	img := image.NewYCbCr(image.Rect(0, 0, int(cc.width), int(cc.height)),
-		image.YCbCrSubsampleRatio420)
+	w := int(cc.width)
+	h := int(cc.height)
+	aw := w + 16
+	ah := h + 16
+	acw := aw / 2
+	ach := ah / 2
+	b := make([]byte, aw*ah+2*acw*ach)
+	img := &image.YCbCr{
+		Y:              b[:aw*ah],
+		Cb:             b[aw*ah : aw*ah+1*acw*ach],
+		Cr:             b[aw*ah+1*acw*ach : aw*ah+2*acw*ach],
+		SubsampleRatio: image.YCbCrSubsampleRatio420,
+		YStride:        aw,
+		CStride:        acw,
+		Rect:           image.Rect(0, 0, w, h),
+	}
 	e := d.imgs.PushBack(img)
 	fr.data[0] = (*C.uint8_t)(&img.Y[0])
 	fr.data[1] = (*C.uint8_t)(&img.Cb[0])
@@ -63,7 +80,7 @@ func (d *Decoder) getBuffer(cc *C.AVCodecContext, fr *C.AVFrame) {
 	fr.linesize[0] = C.int(img.YStride)
 	fr.linesize[1] = C.int(img.CStride)
 	fr.linesize[2] = C.int(img.CStride)
-	fr.extended_data = (**C.uint8_t)(&fr.data[0])
+	C.ff_init_buffer_info(cc, fr)
 	fr.opaque = unsafe.Pointer(e)
 }
 
@@ -71,10 +88,9 @@ func (d *Decoder) releaseBuffer(cc *C.AVCodecContext, fr *C.AVFrame) {
 	var e *list.Element
 	e = (*list.Element)(fr.opaque)
 	d.imgs.Remove(e)
-	log.Println("releasing buffer")
 }
 
-func NewDecoder() (*Decoder) {
+func NewDecoder() *Decoder {
 	var d Decoder
 	d.c = C.avcodec_find_decoder(C.AV_CODEC_ID_VP8)
 	d.cc = C.avcodec_alloc_context3(d.c)
@@ -84,16 +100,7 @@ func NewDecoder() (*Decoder) {
 	return &d
 }
 
-func mkslice(p *C.uint8_t, sz C.int) []byte {
-	var sl = struct {
-		addr uintptr
-		len  int
-		cap  int
-	}{uintptr(unsafe.Pointer(p)), int(sz), int(sz)}
-	return *(*[]byte)(unsafe.Pointer(&sl))
-}
-
-func (d *Decoder) Decode(data []byte) (*image.YCbCr) {
+func (d *Decoder) Decode(data []byte) *image.YCbCr {
 	var pkt C.AVPacket
 	var fr C.AVFrame
 	var got C.int
@@ -107,13 +114,5 @@ func (d *Decoder) Decode(data []byte) (*image.YCbCr) {
 	if got == 0 {
 		log.Panic("Unable to decode")
 	}
-	return &image.YCbCr{
-		Y:              mkslice(fr.data[0], fr.linesize[0] * fr.height),
-		Cb:             mkslice(fr.data[1], fr.linesize[1] * fr.height),
-		Cr:             mkslice(fr.data[2], fr.linesize[2] * fr.height),
-		SubsampleRatio: image.YCbCrSubsampleRatio420,
-		YStride:        int(fr.linesize[0]),
-		CStride:        int(fr.linesize[1]),
-		Rect:           image.Rect(0, 0, int(fr.width), int(fr.height)),
-	}
+	return ((*list.Element)(unsafe.Pointer(fr.opaque))).Value.(*image.YCbCr)
 }
