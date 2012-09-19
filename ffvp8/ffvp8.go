@@ -5,12 +5,26 @@ package ffvp8
 //
 // #include "libavcodec/avcodec.h"
 // extern AVCodec ff_vp8_decoder;
+// static int get_buffer(AVCodecContext * cc, AVFrame * f) { 
+//   void vp8GetBuffer(AVCodecContext * cc, AVFrame * f);
+//   vp8GetBuffer(cc, f);
+//   return 0;
+// }
+// static void release_buffer(AVCodecContext * cc, AVFrame * f) { 
+//   void vp8ReleaseBuffer(AVCodecContext * cc, AVFrame * f);
+//   vp8ReleaseBuffer(cc, f);
+// }
+// static void install_callbacks(AVCodecContext * cc) {
+//   cc->get_buffer = get_buffer;
+//   cc->release_buffer = release_buffer;
+// }
 import "C"
 
 import(
 	"image"
         "unsafe"
         "log"
+"container/list"
 )
 
 func init() {
@@ -21,13 +35,52 @@ func init() {
 type Decoder struct {
 	c *C.AVCodec
 	cc *C.AVCodecContext
+	imgs list.List
+}
+
+//export vp8GetBuffer
+func vp8GetBuffer(cc *C.AVCodecContext, fr *C.AVFrame) {
+	var d *Decoder
+	d = (*Decoder)(cc.opaque)
+	d.getBuffer(cc, fr)
+}
+
+//export vp8ReleaseBuffer
+func vp8ReleaseBuffer(cc *C.AVCodecContext, fr *C.AVFrame) {
+	var d *Decoder
+	d = (*Decoder)(cc.opaque)
+	d.releaseBuffer(cc, fr)
+}
+
+func (d *Decoder) getBuffer(cc *C.AVCodecContext, fr *C.AVFrame) {
+	log.Println("getting buffer", fr)
+	img := image.NewYCbCr(image.Rect(0, 0, int(cc.width), int(cc.height)),
+		image.YCbCrSubsampleRatio420)
+	e := d.imgs.PushBack(img)
+	fr.data[0] = (*C.uint8_t)(&img.Y[0])
+	fr.data[1] = (*C.uint8_t)(&img.Cb[0])
+	fr.data[2] = (*C.uint8_t)(&img.Cr[0])
+	fr.linesize[0] = C.int(img.YStride)
+	fr.linesize[1] = C.int(img.CStride)
+	fr.linesize[2] = C.int(img.CStride)
+	fr.extended_data = (**C.uint8_t)(&fr.data[0])
+	fr.opaque = unsafe.Pointer(e)
+}
+
+func (d *Decoder) releaseBuffer(cc *C.AVCodecContext, fr *C.AVFrame) {
+	var e *list.Element
+	e = (*list.Element)(fr.opaque)
+	d.imgs.Remove(e)
+	log.Println("releasing buffer")
 }
 
 func NewDecoder() (*Decoder) {
 	var d Decoder
 	d.c = C.avcodec_find_decoder(C.AV_CODEC_ID_VP8)
 	d.cc = C.avcodec_alloc_context3(d.c)
-	C.avcodec_open2(d.cc, d.c, nil);
+	d.cc.opaque = unsafe.Pointer(&d)
+	C.install_callbacks(d.cc)
+	C.avcodec_open2(d.cc, d.c, nil)
 	return &d
 }
 
