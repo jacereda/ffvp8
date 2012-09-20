@@ -1,7 +1,5 @@
 package ffvp8
 
-// #cgo darwin CFLAGS: -I/Users/jacereda/ffmpeg/b/include
-// #cgo darwin LDFLAGS: -L/Users/jacereda/ffmpeg/b/lib
 // #cgo LDFLAGS: -lavcodec
 //
 // #include "libavcodec/avcodec.h"
