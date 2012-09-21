@@ -60,7 +60,7 @@ func vp8ReleaseBuffer(cc *C.AVCodecContext, fr *C.AVFrame) {
 }
 
 func aligned(x int) int {
-	return (x+63)&-64
+	return (x+15)&-16 + 16
 }
 
 func (d *Decoder) getBuffer(cc *C.AVCodecContext, fr *C.AVFrame) {
