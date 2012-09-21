@@ -68,8 +68,8 @@ func (d *Decoder) getBuffer(cc *C.AVCodecContext, fr *C.AVFrame) {
 	h := int(cc.height)
 	aw := aligned(w)
 	ah := aligned(h)
-	acw := aw / 2
-	ach := ah / 2
+	acw := aligned(w / 2)
+	ach := aligned(h / 2)
 	ysz := aw * ah
 	csz := acw * ach
 	b := make([]byte, ysz+2*csz)
