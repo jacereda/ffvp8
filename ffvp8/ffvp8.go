@@ -114,7 +114,7 @@ func (d *Decoder) Decode(data []byte) *image.YCbCr {
 	var got C.int
 	C.avcodec_get_frame_defaults(&fr)
 	C.av_init_packet(&pkt)
-	pkt.data = (*C.uint8_t)(unsafe.Pointer(&data[0]))
+	pkt.data = (*C.uint8_t)(&data[0])
 	pkt.size = C.int(len(data))
 	if C.avcodec_decode_video2(d.cc, &fr, &got, &pkt) < 0 || got == 0 {
 		log.Panic("Unable to decode")
