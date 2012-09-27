@@ -1,6 +1,7 @@
-// Copyright 2012 The ffvp8-go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+// Copyright (c) 2012, Jorge Acereda Maciá. All rights reserved.  
+//
+// Use of this source code is governed by a BSD-style license that can
+// be found in the LICENSE file.
 
 // Package ffvp8 provides a wrapper around the VP8 codec in ffmpeg.
 package ffvp8
