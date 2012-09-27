@@ -32,8 +32,14 @@ import (
 	"container/list"
 	"image"
 	"log"
+	"time"
 	"unsafe"
 )
+
+type Frame struct {
+	*image.YCbCr
+	Timecode time.Duration
+}
 
 func init() {
 	C.avcodec_register(&C.ff_vp8_decoder)
@@ -109,7 +115,7 @@ func NewDecoder() *Decoder {
 	return &d
 }
 
-func (d *Decoder) Decode(data []byte) *image.YCbCr {
+func (d *Decoder) Decode(data []byte, tc time.Duration) *Frame {
 	var pkt C.AVPacket
 	var fr C.AVFrame
 	var got C.int
@@ -120,5 +126,5 @@ func (d *Decoder) Decode(data []byte) *image.YCbCr {
 	if C.avcodec_decode_video2(d.cc, &fr, &got, &pkt) < 0 || got == 0 {
 		log.Panic("Unable to decode")
 	}
-	return (*list.Element)(fr.opaque).Value.(*image.YCbCr)
+	return &Frame{(*list.Element)(fr.opaque).Value.(*image.YCbCr), tc}
 }
