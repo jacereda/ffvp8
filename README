@@ -1,0 +1,23 @@
+This project uses libavcodec from the ffmpeg or libav projects to
+provide VP8 decoding in the Go Programming Language.
+
+BUILDING
+
+If your system doesn't provide libavcodec (or it's incompatible with
+this code) and you want to build ffmpeg/libav from source, proceed as
+follows:
+
+cd <ffmpeg or libav sources directory>
+mkdir build
+cd build
+../configure --enable-shared --prefix=$HOME/golibs
+make install
+
+You'll need to tell cgo where to find your libavcodec
+libraries. Assuming you installed to $HOME/golibs in the previous
+step, add something like this to your .bashrc or wherever you setup
+your environment variables:
+
+export AVCODEC_PREFIX=$HOME/golibs"
+export CGO_CFLAGS+=" -I$AVCODEC_PREFIX/include"
+export CGO_LDFLAGS+=" -L$AVCODEC_PREFIX/lib"
