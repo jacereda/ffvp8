@@ -10,7 +10,6 @@ package ffvp8
 //
 // #include "libavcodec/avcodec.h"
 // extern AVCodec ff_vp8_decoder;
-// extern void ff_init_buffer_info(AVCodecContext *s, AVFrame *frame);
 // static int get_buffer(AVCodecContext * cc, AVFrame * f) { 
 //   void vp8GetBuffer(AVCodecContext * cc, AVFrame * f);
 //   f->type = FF_BUFFER_TYPE_USER;
@@ -95,7 +94,11 @@ func (d *Decoder) getBuffer(cc *C.AVCodecContext, fr *C.AVFrame) {
 	fr.linesize[0] = C.int(img.YStride)
 	fr.linesize[1] = C.int(img.CStride)
 	fr.linesize[2] = C.int(img.CStride)
-	C.ff_init_buffer_info(cc, fr)
+	fr.width = C.int(w)
+	fr.height = C.int(h)
+	fr.format = C.int(cc.pix_fmt)
+	fr.sample_aspect_ratio = cc.sample_aspect_ratio
+	fr.pkt_pts = C.AV_NOPTS_VALUE
 	fr.opaque = unsafe.Pointer(e)
 }
 
