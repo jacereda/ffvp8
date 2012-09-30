@@ -13,6 +13,10 @@ cd build
 ../configure --enable-shared --prefix=$HOME/golibs
 make install
 
+If you want just vorbis/vp8, configure as:
+
+../configure --prefix=$HOME/golibs --disable-avconv --disable-avplay --disable-avprobe --disable-avserver --disable-avdevice --disable-avformat --disable-swscale --disable-avfilter --disable-avresample --disable-pthreads --disable-network --disable-everything --enable-shared --enable-decoder=vp8 --enable-decoder=vorbis 
+
 You'll need to tell cgo where to find your libavcodec
 libraries. Assuming you installed to $HOME/golibs in the previous
 step, add something like this to your .bashrc or wherever you setup
