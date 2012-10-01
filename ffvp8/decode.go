@@ -69,7 +69,7 @@ func NewDecoder() *Decoder {
 }
 
 func mkslice(p *C.uint8_t, sz int) []byte {
-	slice := make([]byte, 1)
+	var slice []byte
 	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&slice))
 	hdr.Cap = sz
 	hdr.Len = sz
