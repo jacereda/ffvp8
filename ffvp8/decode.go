@@ -10,27 +10,13 @@ package ffvp8
 //
 // #include "libavcodec/avcodec.h"
 // extern AVCodec ff_vp8_decoder;
-// static int get_buffer(AVCodecContext * cc, AVFrame * f) { 
-//   void vp8GetBuffer(AVCodecContext * cc, AVFrame * f);
-//   f->type = FF_BUFFER_TYPE_USER;
-//   f->extended_data = f->data;
-//   vp8GetBuffer(cc, f);
-//   return 0;
-// }
-// static void release_buffer(AVCodecContext * cc, AVFrame * f) { 
-//   void vp8ReleaseBuffer(AVCodecContext * cc, AVFrame * f);
-//   vp8ReleaseBuffer(cc, f);
-// }
-// static void install_callbacks(AVCodecContext * cc) {
-//   cc->get_buffer = get_buffer;
-//   cc->release_buffer = release_buffer;
-// }
 import "C"
 
 import (
 	"container/list"
 	"image"
 	"log"
+	"reflect"
 	"time"
 	"unsafe"
 )
@@ -38,6 +24,29 @@ import (
 type Frame struct {
 	*image.YCbCr
 	Timecode time.Duration
+}
+
+func dupPlane(src []byte, stride, w, h int) []byte {
+	dst := make([]byte, w*h)
+	for i := 0; i < h; i++ {
+		drow := i * w
+		srow := i * stride
+		copy(dst[drow:drow+w], src[srow:])
+	}
+	return dst
+}
+
+func (f *Frame) dup() *Frame {
+	w := f.Rect.Dx()
+	h := f.Rect.Dy()
+	cw := w / 2
+	ch := h / 2
+	f.Y = dupPlane(f.Y, f.YStride, w, h)
+	f.Cb = dupPlane(f.Cb, f.CStride, cw, ch)
+	f.Cr = dupPlane(f.Cr, f.CStride, cw, ch)
+	f.YStride = w
+	f.CStride = cw
+	return f
 }
 
 func init() {
@@ -50,72 +59,22 @@ type Decoder struct {
 	imgs list.List
 }
 
-//export vp8GetBuffer
-func vp8GetBuffer(cc *C.AVCodecContext, fr *C.AVFrame) {
-	var d *Decoder
-	d = (*Decoder)(cc.opaque)
-	d.getBuffer(cc, fr)
-}
-
-//export vp8ReleaseBuffer
-func vp8ReleaseBuffer(cc *C.AVCodecContext, fr *C.AVFrame) {
-	var d *Decoder
-	d = (*Decoder)(cc.opaque)
-	d.releaseBuffer(cc, fr)
-}
-
-func aligned(x int) int {
-	return (x+15)&-16 + 16
-}
-
-func (d *Decoder) getBuffer(cc *C.AVCodecContext, fr *C.AVFrame) {
-	w := int(cc.width)
-	h := int(cc.height)
-	aw := aligned(w)
-	ah := aligned(h)
-	acw := aligned(w / 2)
-	ach := aligned(h / 2)
-	ysz := aw * ah
-	csz := acw * ach
-	b := make([]byte, ysz+2*csz)
-	img := &image.YCbCr{
-		Y:              b[:ysz],
-		Cb:             b[ysz : ysz+csz],
-		Cr:             b[ysz+csz : ysz+2*csz],
-		SubsampleRatio: image.YCbCrSubsampleRatio420,
-		YStride:        aw,
-		CStride:        acw,
-		Rect:           image.Rect(0, 0, w, h),
-	}
-	e := d.imgs.PushBack(img)
-	fr.data[0] = (*C.uint8_t)(&img.Y[0])
-	fr.data[1] = (*C.uint8_t)(&img.Cb[0])
-	fr.data[2] = (*C.uint8_t)(&img.Cr[0])
-	fr.linesize[0] = C.int(img.YStride)
-	fr.linesize[1] = C.int(img.CStride)
-	fr.linesize[2] = C.int(img.CStride)
-	fr.width = C.int(w)
-	fr.height = C.int(h)
-	fr.format = C.int(cc.pix_fmt)
-	fr.sample_aspect_ratio = cc.sample_aspect_ratio
-	fr.pkt_pts = C.AV_NOPTS_VALUE
-	fr.opaque = unsafe.Pointer(e)
-}
-
-func (d *Decoder) releaseBuffer(cc *C.AVCodecContext, fr *C.AVFrame) {
-	var e *list.Element
-	e = (*list.Element)(fr.opaque)
-	d.imgs.Remove(e)
-}
-
 func NewDecoder() *Decoder {
 	var d Decoder
 	d.c = C.avcodec_find_decoder(C.AV_CODEC_ID_VP8)
 	d.cc = C.avcodec_alloc_context3(d.c)
 	d.cc.opaque = unsafe.Pointer(&d)
-	C.install_callbacks(d.cc)
 	C.avcodec_open2(d.cc, d.c, nil)
 	return &d
+}
+
+func mkslice(p *C.uint8_t, sz int) []byte {
+	slice := make([]byte, 1)
+	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&slice))
+	hdr.Cap = sz
+	hdr.Len = sz
+	hdr.Data = uintptr(unsafe.Pointer(p))
+	return slice
 }
 
 func (d *Decoder) Decode(data []byte, tc time.Duration) *Frame {
@@ -126,8 +85,26 @@ func (d *Decoder) Decode(data []byte, tc time.Duration) *Frame {
 	C.av_init_packet(&pkt)
 	pkt.data = (*C.uint8_t)(&data[0])
 	pkt.size = C.int(len(data))
-	if C.avcodec_decode_video2(d.cc, &fr, &got, &pkt) < 0 || got == 0 {
+	if C.avcodec_decode_video2(d.cc, &fr, &got, &pkt) < 0 {
 		log.Panic("Unable to decode")
 	}
-	return &Frame{(*list.Element)(fr.opaque).Value.(*image.YCbCr), tc}
+	if got == 0 {
+		return nil
+	}
+	ys := int(fr.linesize[0])
+	cs := int(fr.linesize[1])
+	yw := int(d.cc.width)
+	yh := int(d.cc.height)
+	ysz := ys * yh
+	csz := cs * yh / 2
+	img := &image.YCbCr{
+		Y:              mkslice(fr.data[0], ysz),
+		Cb:             mkslice(fr.data[1], csz),
+		Cr:             mkslice(fr.data[2], csz),
+		SubsampleRatio: image.YCbCrSubsampleRatio420,
+		YStride:        ys,
+		CStride:        cs,
+		Rect:           image.Rect(0, 0, yw, yh),
+	}
+	return (&Frame{img, tc}).dup()
 }
