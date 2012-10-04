@@ -17,36 +17,29 @@ import (
 	"image"
 	"log"
 	"reflect"
-	"time"
 	"unsafe"
 )
-
-type Frame struct {
-	*image.YCbCr
-	Timecode time.Duration
-}
 
 func dupPlane(src []byte, stride, w, h int) []byte {
 	dst := make([]byte, w*h)
 	for i := 0; i < h; i++ {
 		drow := i * w
 		srow := i * stride
-		copy(dst[drow:drow+w], src[srow:])
+		copy(dst[drow:drow+w], src[srow:srow+w])
 	}
 	return dst
 }
 
-func (f *Frame) dup() *Frame {
+func dup(f *image.YCbCr) {
 	w := f.Rect.Dx()
 	h := f.Rect.Dy()
-	cw := w / 2
-	ch := h / 2
+	cw := (w + 1) / 2
+	ch := (h + 1) / 2
 	f.Y = dupPlane(f.Y, f.YStride, w, h)
 	f.Cb = dupPlane(f.Cb, f.CStride, cw, ch)
 	f.Cr = dupPlane(f.Cr, f.CStride, cw, ch)
 	f.YStride = w
 	f.CStride = cw
-	return f
 }
 
 func init() {
@@ -77,7 +70,7 @@ func mkslice(p *C.uint8_t, sz int) []byte {
 	return slice
 }
 
-func (d *Decoder) Decode(data []byte, tc time.Duration) *Frame {
+func (d *Decoder) Decode(data []byte) *image.YCbCr {
 	var pkt C.AVPacket
 	var fr C.AVFrame
 	var got C.int
@@ -106,5 +99,6 @@ func (d *Decoder) Decode(data []byte, tc time.Duration) *Frame {
 		CStride:        cs,
 		Rect:           image.Rect(0, 0, yw, yh),
 	}
-	return (&Frame{img, tc}).dup()
+	dup(img)
+	return img
 }
