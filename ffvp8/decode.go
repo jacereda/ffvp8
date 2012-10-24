@@ -102,3 +102,7 @@ func (d *Decoder) Decode(data []byte) *image.YCbCr {
 	dup(img)
 	return img
 }
+
+func (d *Decoder) Flush() {
+	C.avcodec_flush_buffers(d.cc)
+}
