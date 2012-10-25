@@ -9,6 +9,9 @@ package ffvp8
 // #cgo LDFLAGS: -lavcodec
 //
 // #include "libavcodec/avcodec.h"
+// #if LIBAVCODEC_VERSION_MAJOR == 53
+// #define AV_CODEC_ID_VP8 CODEC_ID_VP8
+// #endif
 // extern AVCodec ff_vp8_decoder;
 import "C"
 
