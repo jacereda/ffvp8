@@ -12,7 +12,6 @@ package ffvp8
 // #if LIBAVCODEC_VERSION_MAJOR == 53
 // #define AV_CODEC_ID_VP8 CODEC_ID_VP8
 // #endif
-// extern AVCodec ff_vp8_decoder;
 import "C"
 
 import (
@@ -46,7 +45,7 @@ func dup(f *image.YCbCr) {
 }
 
 func init() {
-	C.avcodec_register(&C.ff_vp8_decoder)
+	C.avcodec_register_all()
 }
 
 type Decoder struct {
