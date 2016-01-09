@@ -18,6 +18,6 @@ libraries. Assuming you installed to $HOME/golibs in the previous
 step, add something like this to your .bashrc or wherever you setup
 your environment variables:
 
-export AVCODEC_PREFIX=$HOME/golibs"
+export AVCODEC_PREFIX="$HOME/golibs"
 export CGO_CFLAGS+=" -I$AVCODEC_PREFIX/include"
 export CGO_LDFLAGS+=" -L$AVCODEC_PREFIX/lib"

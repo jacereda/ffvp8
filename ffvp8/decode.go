@@ -6,9 +6,10 @@
 // Package ffvp8 provides a wrapper around the VP8 codec in ffmpeg.
 package ffvp8
 
-// #cgo LDFLAGS: -lavcodec
+// #cgo LDFLAGS: -lavcodec -lavutil
 //
 // #include "libavcodec/avcodec.h"
+// #include "libavutil/frame.h"
 // #if LIBAVCODEC_VERSION_MAJOR == 53
 // #define AV_CODEC_ID_VP8 CODEC_ID_VP8
 // #endif
@@ -74,13 +75,14 @@ func mkslice(p *C.uint8_t, sz int) []byte {
 
 func (d *Decoder) Decode(data []byte) *image.YCbCr {
 	var pkt C.AVPacket
-	var fr C.AVFrame
+	var fr *C.AVFrame
 	var got C.int
-	C.avcodec_get_frame_defaults(&fr)
+	fr = C.av_frame_alloc()
+	defer C.av_frame_free(&fr)
 	C.av_init_packet(&pkt)
 	pkt.data = (*C.uint8_t)(&data[0])
 	pkt.size = C.int(len(data))
-	if C.avcodec_decode_video2(d.cc, &fr, &got, &pkt) < 0 {
+	if C.avcodec_decode_video2(d.cc, fr, &got, &pkt) < 0 {
 		log.Panic("Unable to decode")
 	}
 	if got == 0 {
