@@ -6,7 +6,7 @@
 // Package ffvp8 provides a wrapper around the VP8 codec in ffmpeg.
 package ffvp8
 
-// #cgo LDFLAGS: -lavcodec -lavutil
+// #cgo pkg-config: libavcodec libavutil
 //
 // #include "libavcodec/avcodec.h"
 // #include "libavutil/frame.h"
